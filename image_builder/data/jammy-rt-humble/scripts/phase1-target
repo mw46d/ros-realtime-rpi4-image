@@ -8,6 +8,94 @@ apt-get install -y ros-$ROS_DISTRO-ros-base
 # Install some misc packages
 apt-get install -y cpufrequtils libraspberrypi-bin rt-tests cpuset stress stress-ng
 
+# MARCO
+set -x
+apt-get install -y hostapd dnsmasq iw wpasupplicant dhcpcd5
+rm -f /etc/systemd/system/multi-user.target.wants/dnsmasq.service /etc/systemd/system/multi-user.target.wants/hostapd.service
+
+HN="ubuntu-2204-rpi5"
+echo "$HN" > /etc/hostname
+
+# https://github.com/RaspberryConnect/AutoHotspot-Installer/
+
+cat > /etc/hostapd/hostapd.conf <<-EOF
+	interface=wlan0
+	driver=nl80211
+	ssid=$(sed 's/-/_/g' <<< $HN)_$(date +'%S%M')
+	hw_mode=g
+	channel=2
+	wmm_enabled=1
+	macaddr_acl=0
+	auth_algs=1
+	ignore_broadcast_ssid=0
+	wpa=2
+	wpa_passphrase=$HN
+	wpa_key_mgmt=WPA-PSK
+	wpa_pairwise=CCMP
+	rsn_pairwise=CCMP
+
+	#80211n - Change GB to your WiFi country code
+	country_code=US
+	ieee80211n=1
+	ieee80211d=1
+	EOF
+
+cat >> /etc/dhcpcd.conf <<-EOF
+	#RaspberryConnect.com
+	#Autohotspots
+	nohook wpa_supplicant
+	EOF
+
+cat > /etc/dnsmasq.conf <<-EOF
+	#RaspberryConnect.com Autohotspot
+	#AutoHotspotN config
+	interface=wlan0
+	bind-dynamic
+	server=8.8.8.8
+	domain-needed
+	bogus-priv
+	dhcp-range=192.168.50.150,192.168.50.200,72h
+	EOF
+
+cat > /etc/wpa_supplicant/wpa_supplicant.conf <<-EOF
+	country=US
+	ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+	#
+	# home network; allow all valid ciphers
+	network={
+	    ssid="Whatever_SSID_you_want"
+	    scan_ssid=1
+	    key_mgmt=WPA-PSK
+	    psk="And your password"
+	}
+	EOF
+
+cat >> /etc/systemd/system/autohotspot.service <<-EOF
+	[Unit]
+	Description=Automatically generates a Hotspot when a valid SSID is not in range
+	After=multi-user.target
+	[Service]
+	Type=oneshot
+	RemainAfterExit=yes
+	ExecStart=/usr/bin/autohotspotN
+	[Install]
+	WantedBy=multi-user.target
+	EOF
+
+cat >> /etc/NetworkManager/conf.d/99-unmanaged-devices.conf <<-EOF
+	[keyfile]
+	unmanaged-devices=interface-name:wlan0
+	EOF
+
+ln -s /etc/systemd/system/autohotspot.service /etc/systemd/system/multi-user.target.wants/
+systemctl daemon-reload || true
+
+echo "*/5 * * * * sudo /usr/bin/autohotspot >/dev/null 2>&1" >> /var/spool/cron/crontabs/root
+
+set +x
+
 # clean up to reduce image size
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+
