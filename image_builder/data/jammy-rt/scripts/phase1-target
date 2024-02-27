@@ -5,6 +5,11 @@ echo "PINNED_CPU_FREQUENCY=${PINNED_CPU_FREQUENCY}" > /etc/default/cpu-frequency
 
 export DEBIAN_FRONTEND=noninteractive
 
+# MARCO find the STOCK_LINUX_VERSION;-)
+set -x
+STOCK_LINUX_VERSION=$(dpkg -l "linux-image-*-raspi" | awk '/linux-image-/ { print $2; exit 0; }' | sed 's/linux-image-//;s/-raspi$//')
+set +x
+
 # Setting up PREEMPT_RT kernel
 cd /setup
 dpkg -i linux-*.deb
@@ -16,6 +21,7 @@ rm linux-*.deb
 # - cryptsetup: don't need to setup disk encryption. Also, causes build failures on some host system configurations.
 # - mdadm: don't need to setup raid.
 # - Stock linux kernel: for obvious reasons.
+
 apt-get purge --autoremove -y \
   cryptsetup \
   fwupd \
@@ -38,6 +44,39 @@ apt-get purge --autoremove -y \
 ln -s -f /boot/vmlinuz-${LINUX_RT_VERSION}-raspi /boot/vmlinuz
 ln -s -f /boot/initrd.img-${LINUX_RT_VERSION}-raspi /boot/initrd.img
 
+# Disable ondemand govenor and set constant frequency
+systemctl disable ondemand
+systemctl enable cpu-frequency
+
+# Disable rt-throttling
+systemctl enable rt-throttling
+
+# Disable memory compaction
+systemctl enable memory-compaction
+
+# Disable unattended-upgrades
+apt remove -y unattended-upgrades
+
+# Remove multipath-tools, see: https://github.com/ros-realtime/ros-realtime-rpi4-image/issues/30
+apt-get purge -y multipath-tools
+
+# TODO: If specified, create an image with isolcpus already setup.
+
+# MARCO
+set -x
+add-apt-repository -y ppa:oibaf/graphics-drivers
+
+apt-get autoremove -y
+apt-get -y dist-upgrade
+apt-get install -y glmark2 openssh-server
+
+apt-get install -y libcrypt-dev libnsl-dev rpcsvc-proto libtirpc-dev
+dpkg --install --force-all *.deb
+apt-get install -y -f
+apt-get clean
+rm *.deb
+set +x
+
 cp /boot/vmlinuz /boot/firmware/vmlinuz
 cp /boot/initrd.img /boot/firmware/initrd.img
 
@@ -57,24 +96,14 @@ if [ "$(md5sum /boot/firmware/initrd.img | cut -f 1 -d ' ')" != "$(md5sum /boot/
   exit 1
 fi
 
-# Disable ondemand govenor and set constant frequency
-systemctl disable ondemand
-systemctl enable cpu-frequency
-
-# Disable rt-throttling
-systemctl enable rt-throttling
-
-# Disable memory compaction
-systemctl enable memory-compaction
-
-# Disable unattended-upgrades
-apt remove -y unattended-upgrades
-
-# Remove multipath-tools, see: https://github.com/ros-realtime/ros-realtime-rpi4-image/issues/30
-apt-get purge -y multipath-tools
-
-# TODO: If specified, create an image with isolcpus already setup.
-
 # clean up to reduce image size
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+# MARCO
+set -x
+touch /boot/ssh
+useradd -e 3000-12-31 -G adm,dialout,cdrom,sudo,dip,video,plugdev -p $(openssl passwd -6 -salt $(head -c 9 /dev/urandom | base64) ubuntu) -s /bin/bash -U ubuntu
+
+[ -f /boot/firmware/bcm2712-rpi-5-b.dtb ] || [ -f /usr/lib/linux-image-${LINUX_RT_VERSION}-raspi/broadcom/bcm2712-rpi-5-b.dtb ] && cp /usr/lib/linux-image-${LINUX_RT_VERSION}-raspi/broadcom/bcm2712-rpi-5-b.dtb /boot/firmware/
+[ -d /boot/dtbs/${LINUX_RT_VERSION}-raspi ] && cp /boot/firmware/bcm2712-rpi-5-b.dtb /boot/dtbs/${LINUX_RT_VERSION}-raspi/ || true

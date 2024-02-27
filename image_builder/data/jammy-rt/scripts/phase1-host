@@ -20,3 +20,39 @@ cp linux-*.deb $CHROOT_PATH/setup/
 rm linux-*.deb
 
 popd
+
+# MARCO
+set -x
+pushd $CACHE_DIR
+v="2.38-1ubuntu6.1"
+for i in libc-bin_${v}_arm64.deb libc-dev-bin_${v}_arm64.deb libc6-dbg_${v}_arm64.deb libc6-dev_${v}_arm64.deb libc6_${v}_arm64.deb locales_${v}_all.deb
+do
+    [ -f $i ] || wget --progress=dot -e dotbytes=10M http://ports.ubuntu.com/ubuntu-ports/pool/main/g/glibc/$i
+    cp -p $i $CHROOT_PATH/setup/
+done
+
+v="1.5.5+dfsg2-1ubuntu2"
+for i in libzstd-dev_${v}_arm64.deb libzstd1_${v}_arm64.deb
+do
+    [ -f $i ] || wget --progress=dot -e dotbytes=10M http://ports.ubuntu.com/ubuntu-ports/pool/main/libz/libzstd/$i
+    cp -p $i $CHROOT_PATH/setup/
+done
+
+v="3.107ubuntu2"
+i="flash-kernel_${v}_arm64.deb"
+[ -f $i ] || wget --progress=dot -e dotbytes=10M http://ports.ubuntu.com/ubuntu-ports/pool/main/f/flash-kernel/$i
+cp -p $i $CHROOT_PATH/setup/
+
+v="0.374-1"
+i="hwdata_${v}_all.deb"
+[ -f $i ] || wget --progress=dot -e dotbytes=10M http://ports.ubuntu.com/ubuntu-ports/pool/main/h/hwdata/$i
+cp -p $i $CHROOT_PATH/setup/
+
+v="20.4-1ubuntu1"
+i="rpi-eeprom_${v}_arm64.deb"
+[ -f $i ] || wget --progress=dot -e dotbytes=10M http://ports.ubuntu.com/ubuntu-ports/pool/main/r/rpi-eeprom/$i
+cp -p $i $CHROOT_PATH/setup/
+
+popd
+set +x
+
